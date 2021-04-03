@@ -122,7 +122,6 @@
 
 #define OCT_NSAVREG 20
 	
-
 	.equ SPL,0x3D
 	.equ SPH,0x3E
 	.equ SREG,0x3F
@@ -155,11 +154,13 @@ tcbtabl: .skip 8*TCB_SIZE	; TCB table (stack pointer only)
 	.type oct_spin,function
 oct_spin:
 0:	rjmp 0b
+	.size oct_spin, .-oct_spin
 
 	.type oct_rest,function
 oct_rest:
 0:	sleep
 	rjmp 0b
+	.size oct_rest, .-oct_rest
 
 	;; void oct_os_init(uint8_t id)
 	;; id: main task id (r24)
@@ -289,6 +290,7 @@ isr_task_swap:
 	rcall task_swap
 	POP_CALLER_REGS
 	ret
+	.size oct_task_swap, .-oct_task_swap
 	
 	;; void oct_wake_task(uint8_t id_set)
 	;; id: or'd ids of tasks to wake (r24)
