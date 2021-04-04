@@ -2,4 +2,5 @@
 *.asm
 *.elf
 *~
+doc
 spin
