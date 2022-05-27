@@ -35,6 +35,10 @@
 #ifndef __ASSEMBLER__
 #include <stdint.h>
 
+#ifndef SW_INTR
+#error "SW_INTR() not defined"
+#endif
+
 void oct_os_init(uint8_t id);
 void oct_attach_task(uint8_t id, void (*fn)(void), uint8_t *sa, uint16_t sz);
 void oct_detach_task(uint8_t id);
@@ -47,17 +51,20 @@ void oct_isr_wake_task_1(uint8_t id_set);
 
 void oct_spin();
 void oct_rest();
+void task_swap();			/* temp */
 
 static inline void oct_isr_wake_task(uint8_t id_set) {
   asm volatile(" mov r24,%0\n"
 	       " call oct_isr_wake_task_1\n"
 	       : : "r"(id_set) : "r23", "r24", "r25");
+  SW_INTR();
 }
 
 static inline void oct_isr_idle_task(uint8_t id_set) {
   asm volatile(" mov r24,%0\n"
 	       " call oct_idle_task_1\n"
 	       : : "r"(id_set) : "r23", "r24", "r25");
+  SW_INTR();
 }
 
 static inline uint8_t oct_cur_task(void) {

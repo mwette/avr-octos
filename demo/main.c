@@ -31,6 +31,11 @@
  * + TASK2 sets LED bright for about 0.2 s, then sleeps
  * + TCA0 timer wakes TASK2 and TASK3 about every 2 s
 
+ * Octos now uses a software interrupt, typically implemented via PORTx:
+ * + configure PORTE as input: PORTE.DIR |= 0x80;
+ * + set interrupt on toggle: PORTE.PIN7CTRL |= PORT_ISC_BOTHEDGES_gc;
+ * + define SWINT() to do toggle: "  sts %1,0x80"
+
  */
 
 #ifdef F_CPU
@@ -42,55 +47,35 @@
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
 #include <util/delay.h>
+
+#define xSW_INTR()		\
+  asm("  ldi r24,0x80\n"	\
+      "  sts %0,r24\n"		\
+      : : "n"(_SFR_MEM_ADDR(PORTE.OUTTGL)) : "r24");
+
+#define SW_INTR() asm(" ldi r24,0x80\n sts %0,r24\n"::\
+		      "n"(_SFR_MEM_ADDR(PORTE.OUTTGL)):"r24");
+
 #include "octos.h"
 
-/* Flash LED and wait for user button press to start application code. */
-void nano_button_wait() {
-  uint8_t st = 1;			/* switch state */
-  uint8_t lc;				/* led counter */
-
-  TCB0.CCMP = 333;			/* debounce time */
-  TCB0.CTRLA = TCB_CLKSEL_CLKDIV1_gc | TCB_ENABLE_bm;
-  PORTF.DIRSET = PIN5_bm;		/* LED output */
-  
-  while (st) {
-    switch (st) {
-    case 1: if ((PORTF.IN & PIN6_bm) == 0) st = 2; break;
-    case 2: if ((PORTF.IN & PIN6_bm) != 0) st = 0; break;
-    }
-    if (lc++ == 0) PORTF.OUTTGL = PIN5_bm; /* toggle LED */
-    while ((TCB0.INTFLAGS & 0x01) == 0);   /* wait for bounce */
-    TCB0.INTFLAGS = 0x01;		   /* reset flag */
-  }
-
-  /* Restore MCU state. */
-  PORTF.DIRCLR = PIN5_bm;
-  TCB0.CTRLA = 0x00;
-  TCB0.CCMP = 0;
-  TCB0.INTFLAGS = 0x01;
-}
-
-void init_sys_clk() {
-  _PROTECTED_WRITE(CLKCTRL.MCLKCTRLA, CLKCTRL_CLKSEL_OSC20M_gc);
-  _PROTECTED_WRITE(CLKCTRL.MCLKCTRLB, CLKCTRL_PDIV_4X_gc | CLKCTRL_PEN_bm);
-  while ((CLKCTRL.MCLKSTATUS & 0x11) != 0x10); /* wait for stable OSC20M */
-}
-
-void init_wdt() {
-  _PROTECTED_WRITE(WDT.CTRLA, WDT_PERIOD_8KCLK_gc); /* 8 sec watchdog */
-}
-
-void init_tca() {
-  TCA0.SINGLE.CTRLA = TCA_SINGLE_CLKSEL_DIV256_gc | TCA_SINGLE_ENABLE_bm;
-  TCA0.SINGLE.CTRLB = TCA_SINGLE_WGMODE_NORMAL_gc;
-  TCA0.SINGLE.INTCTRL = TCA_SINGLE_OVF_bm;
-  TCA0.SINGLE.PER = 3*9745;
+ISR(PORTE_PORT_vect, ISR_NAKED) {
+#if 1
+  asm("  jmp task_swap\n");
+#else
+  asm("	 ldi r22,lo8(%1)\n"
+      "  ldi r23,hi8(%1)\n"
+      "  push r22\n"
+      "  push r23\n"
+      "  reti\n" : : : "r22", "r23" );
+#endif
 }
 
 ISR(TCA0_OVF_vect) {
   TCA0.SINGLE.INTFLAGS = TCA_SINGLE_ENABLE_bm;
   oct_isr_wake_task(OCT_TASK2 | OCT_TASK3);
 }
+
+/* ---------------------------------------------------------------------------*/
 
 #define T2_ITER 15000
 #define T3_ITER 30000
@@ -130,6 +115,27 @@ void __attribute__((OS_task)) task3(void) {
 #define STKSIZ7 0x80
 uint8_t task7_stk[STKSIZ7];
 
+/* ---------------------------------------------------------------------------*/
+
+void init_sys_clk() {
+  _PROTECTED_WRITE(CLKCTRL.MCLKCTRLA, CLKCTRL_CLKSEL_OSC20M_gc);
+  _PROTECTED_WRITE(CLKCTRL.MCLKCTRLB, CLKCTRL_PDIV_4X_gc | CLKCTRL_PEN_bm);
+  while ((CLKCTRL.MCLKSTATUS & 0x11) != 0x10); /* wait for stable OSC20M */
+}
+
+void init_wdt() {
+  _PROTECTED_WRITE(WDT.CTRLA, WDT_PERIOD_8KCLK_gc); /* 8 sec watchdog */
+}
+
+void init_tca() {
+  TCA0.SINGLE.CTRLA = TCA_SINGLE_CLKSEL_DIV256_gc | TCA_SINGLE_ENABLE_bm;
+  TCA0.SINGLE.CTRLB = TCA_SINGLE_WGMODE_NORMAL_gc;
+  TCA0.SINGLE.INTCTRL = TCA_SINGLE_OVF_bm;
+  TCA0.SINGLE.PER = 3*9745;
+}
+
+void nano_button_wait();
+
 void main(void) {
   nano_button_wait();			/* if non-sim, wait for button */
 
@@ -156,6 +162,32 @@ void main(void) {
     PORTF.OUTSET = PIN5_bm;
     _delay_us(20);
   }
+}
+
+/* Flash LED and wait for user button press to start application code. */
+void nano_button_wait() {
+  uint8_t st = 1;			/* switch state */
+  uint8_t lc;				/* led counter */
+
+  TCB0.CCMP = 333;			/* debounce time */
+  TCB0.CTRLA = TCB_CLKSEL_CLKDIV1_gc | TCB_ENABLE_bm;
+  PORTF.DIRSET = PIN5_bm;		/* LED output */
+  
+  while (st) {
+    switch (st) {
+    case 1: if ((PORTF.IN & PIN6_bm) == 0) st = 2; break;
+    case 2: if ((PORTF.IN & PIN6_bm) != 0) st = 0; break;
+    }
+    if (lc++ == 0) PORTF.OUTTGL = PIN5_bm; /* toggle LED */
+    while ((TCB0.INTFLAGS & 0x01) == 0);   /* wait for bounce */
+    TCB0.INTFLAGS = 0x01;		   /* reset flag */
+  }
+
+  /* Restore MCU state. */
+  PORTF.DIRCLR = PIN5_bm;
+  TCB0.CTRLA = 0x00;
+  TCB0.CCMP = 0;
+  TCB0.INTFLAGS = 0x01;
 }
 
 /* --- last line --- */
