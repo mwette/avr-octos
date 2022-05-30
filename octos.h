@@ -35,9 +35,19 @@
 #ifndef __ASSEMBLER__
 #include <stdint.h>
 
-#ifndef SW_INTR
-#error "SW_INTR() not defined"
+#ifndef OCT_SWINT
+#error "OCT_SWINT() not defined"
 #endif
+
+#define OCT_SWISR() 		\
+  asm("	 ldi r22,lo8(%0)\n"	\
+      "  push r22\n"		\
+      "  ldi r22,hi8(%0)\n"	\
+      "  push r22\n"		\
+      "  reti\n" 		\
+      :				\
+      : "m"(task_swap)		\
+      : "r22" )
 
 void oct_os_init(uint8_t id);
 void oct_attach_task(uint8_t id, void (*fn)(void), uint8_t *sa, uint16_t sz);

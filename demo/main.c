@@ -48,26 +48,34 @@
 #include <avr/wdt.h>
 #include <util/delay.h>
 
-#define xSW_INTR()		\
+#define XXX_SW_INTR()		\
   asm("  ldi r24,0x80\n"	\
       "  sts %0,r24\n"		\
       : : "n"(_SFR_MEM_ADDR(PORTE.OUTTGL)) : "r24");
 
-#define SW_INTR() asm(" ldi r24,0x80\n sts %0,r24\n"::\
-		      "n"(_SFR_MEM_ADDR(PORTE.OUTTGL)):"r24");
+#define OCT_SWINT() 		\
+  asm(" ldi r24,0x80\n"		\
+      " sts %0,r24\n"		\
+      :				\
+      : "n"(_SFR_MEM_ADDR(PORTE.OUTTGL)) \
+      : "r24")
+
+#define OCT_SWISR() 		\
+  asm("	 ldi r22,lo8(%0)\n"	\
+      "  push r22\n"		\
+      "  ldi r22,hi8(%0)\n"	\
+      "  push r22\n"		\
+      "  reti\n" 		\
+      :				\
+      : "m"(task_swap)		\
+      : "r22" )
 
 #include "octos.h"
 
+void task_swap();
+
 ISR(PORTE_PORT_vect, ISR_NAKED) {
-#if 1
-  asm("  jmp task_swap\n");
-#else
-  asm("	 ldi r22,lo8(%1)\n"
-      "  ldi r23,hi8(%1)\n"
-      "  push r22\n"
-      "  push r23\n"
-      "  reti\n" : : : "r22", "r23" );
-#endif
+  OCT_SWISR();
 }
 
 ISR(TCA0_OVF_vect) {
