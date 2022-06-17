@@ -1,6 +1,6 @@
 ;;; octos.S -
 
-;;; Copyright (C) 2019-2021 Matthew R. Wette
+;;; Copyright (C) 2019-2022 Matthew R. Wette
 
 ;;; Permission is hereby granted, free of charge, to any person obtaining a copy
 ;;; of this software and associated documentation files (the "Software"), to
@@ -45,8 +45,23 @@
 
 ;;; If feel brave and asm-code all non-main tasks to use a reduced set of
 ;;; registers, you can reduce callee reg set to make context switches faster.
+
+#define PORTE_OUTTGL 0x0487
+#ifndef OCT_SWINT
+#define OCT_SWINT ldi r24,0x80 $ sts PORTE_OUTTGL,r24
+#endif
 	
 #define OCT_TASK7 0x80
+	
+#define PUSH_OSUTIL_REGS \
+	push r23 $ \
+	push r24 $ \
+	push r25
+	
+#define POP_OSUTIL_REGS \
+	pop r25 $ \
+	pop r24 $ \
+	pop r23
 	
 #define PUSH_CALLER_REGS \
 	push r18 $ \
@@ -54,9 +69,6 @@
 	push r20 $ \
 	push r21 $ \
 	push r22 $ \
-	push r23 $ \
-	push r24 $ \
-	push r25 $ \
 	push r26 $ \
 	push r27 $ \
 	push r30 $ \
@@ -67,9 +79,6 @@
 	pop r30 $ \
 	pop r27 $ \
 	pop r26 $ \
-	pop r25 $ \
-	pop r24 $ \
-	pop r23 $ \
 	pop r22 $ \
 	pop r21 $ \
 	pop r20 $ \
@@ -120,7 +129,11 @@
 	pop r1 $ \
 	pop r0
 
-#define OCT_NSAVREG 20
+;; #define OCT_NSAVREG 20
+#define OCT_NSAVREG 32
+
+#define PUSH_OTHER_REGS PUSH_CALLER_REGS $ PUSH_CALLEE_REGS
+#define POP_OTHER_REGS POP_CALLEE_REGS $ POP_CALLER_REGS
 	
 	.equ SPL,0x3D
 	.equ SPH,0x3E
@@ -133,10 +146,10 @@
 	.global oct_detach_task
 	.global oct_idle_task
 	.global oct_wake_task
-	.global oct_isr_idle_task_1
-	.global oct_isr_wake_task_1
 	.global oct_spin
 	.global oct_rest
+
+	.global task_swap	; temp
 
 	.section .data
 	.global oct_curmask
@@ -146,6 +159,7 @@ oct_curmask: .skip 1		; current mask, e.g., 0x07 for id 0x08
 oct_rdylist: .skip 1		; list of ready tasks, one per bit
 do_swap: .skip 1		; task swap needed
 swap_ip: .skip 1		; swap in progress
+	.align 4
 tcbtabl: .skip 8*TCB_SIZE	; TCB table (stack pointer only)
 
 	.section .text
@@ -169,7 +183,7 @@ oct_os_init:
 	push r29
 	push r28
 	mov r25,r24		; load task-id arg
-	;; init TCB for TASK6..TASK0
+	;; init TCB for TASK7..TASK0
 	ldi r27,hi8(tcbtabl)
 	ldi r26,lo8(tcbtabl)
 	adiw X,7*TCB_SIZE
@@ -252,46 +266,6 @@ oct_detach_task:
 	ret
 	.size oct_detach_task, .-oct_detach_task
 	
-	;; void oct_isr_wake_task_1(uint8_t id)
-	;; id: OR'd ids of tasks to wake (r24)
-	;; clobbers: r23,r24,r25
-	.type oct_isr_wake_task_1,function
-oct_isr_wake_task_1:
-	in r23,SREG
-	lds r25,oct_rdylist
-	or r25,r24
-	sts oct_rdylist,r25
-	lds r24,oct_curmask
-	and r25,r24
-	breq 1f
-	call isr_task_swap
-1:	out SREG,r23
-	ret
-	.size oct_isr_wake_task_1, .-oct_isr_wake_task_1
-
-	;; oct_isr_idle_task_1(uint8_t id)
-	;; id: task ID to idle (r24)
-	;; clobbers: r23,r24,r25
-	.type oct_isr_idle_task_1,function
-oct_isr_idle_task_1:
-	in r23,SREG
-	andi r24,~OCT_TASK7	; never idle task7
-	com r24			; ones complement
-	lds r25,oct_rdylist
-	and r25,r24
-	sts oct_rdylist,r25
-	lds r24,oct_curmask
-	rjmp isr_task_swap
-	.size oct_isr_idle_task_1, .-oct_isr_idle_task_1
-
-	.type isr_task_swap,function
-isr_task_swap:
-	PUSH_CALLER_REGS
-	rcall task_swap
-	POP_CALLER_REGS
-	ret
-	.size oct_task_swap, .-oct_task_swap
-	
 	;; void oct_wake_task(uint8_t id_set)
 	;; id: or'd ids of tasks to wake (r24)
 	.type oct_wake_task,function
@@ -303,7 +277,7 @@ oct_wake_task:
 	sts oct_rdylist,r25
 	lds r24,oct_curmask
 	and r25,r24
-	brne task_swap
+	OCT_SWINT
 	out SREG,r23
 	ret
 	.size oct_wake_task, .-oct_wake_task
@@ -312,39 +286,41 @@ oct_wake_task:
 	;; id: task ID to idle (r24)
 	.type oct_idle_task,function
 oct_idle_task:
-	in r23,SREG
 	andi r24,~OCT_TASK7	; never idle task7
 	com r24			; ones complement
+	in r23,SREG
 	cli
 	lds r25,oct_rdylist
 	and r25,r24
 	sts oct_rdylist,r25
-	lds r24,oct_curmask
-	rjmp task_swap
+	OCT_SWINT
+	out SREG,r23
+	ret
 	.size oct_idle_task, .-oct_idle_task
 
-	;; void task_swap(void)
-	;; Get here via jmp from wake_task or idle_task only, with:
-	;; 1) interrupts disabled
-	;; 2) SREG in r23
-	;; 3) curmask in r24
-	;; TODO: FIXME? should keep curmask and SP consistent : SPIN check
+	;; void task_swap()
 	.type task_swap,function
 task_swap:
+	;; move following to SWINT?
+	PUSH_OSUTIL_REGS	; push r23, r24, r25
+	in r23,SREG
+	cli
 	;; if running, flag and return
 	lds r25,swap_ip
 	tst r25
 	breq swap_body
 	sts do_swap,r25		; flag to re-run
 	out SREG,r23
+	POP_OSUTIL_REGS
 	ret
 swap_body:
+	lds r24,oct_curmask
 	ldi r25,1
 	sts swap_ip,r25
 	;; interrupts enabled in this section
 	sei
 	push r23		; push SREG
-	PUSH_CALLEE_REGS	; save registers
+	PUSH_OTHER_REGS	 	; save registers
 	push r24		; push curmask
 	;; incoming TCB addr => Y (TODO: if Y is zero, abort)
 	lds r25,oct_rdylist
@@ -374,7 +350,7 @@ swap_body:
 	st Y+,r25		; save outgoing SPH to TCB
 	pop r24			; load curmask
 	sts oct_curmask,r24	;   and restore 
-	POP_CALLEE_REGS		; restore registers
+	POP_OTHER_REGS		; restore registers
 	pop r23			; load SREG, restore later
 	;; trailer
 	cli
@@ -399,6 +375,7 @@ swap_body:
 1:	;; done
 	sts swap_ip,r1		; r1 == 0 here
 	out SREG,r23		; restore SREG
+	POP_OSUTIL_REGS
 	ret
 	.size task_swap, .-task_swap
 

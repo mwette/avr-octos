@@ -5,7 +5,7 @@ CC = $(TOOL_BIN)/avr-gcc
 OBJCOPY = $(TOOL_BIN)/avr-objcopy 
 OBJDUMP = $(TOOL_BIN)/avr-objdump 
 
-CFLAGS = -Os -I.. -mmcu=atmega4809 -B/opt/local/avr/packs/mega-2.0.12
+CFLAGS = -Os -I.. -mmcu=atmega4809 -B/opt/local/avr/packs/mega
 
 all: main.hex main.asm
 

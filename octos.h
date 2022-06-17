@@ -1,6 +1,6 @@
 /* octos.h - 
  * 
- * Copyright (C) 2019-2021 Matthew R. Wette
+ * Copyright (C) 2019-2022 Matthew R. Wette
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -23,6 +23,37 @@
 #ifndef OCTOS_H_
 #define OCTOS_H_
 
+
+#define OCT_TMPREG GPIOR0
+#ifndef __ASSEMBLER__
+// FIXME: using GPIOR0 as temp
+#define OCT_SWISR() asm(	\
+  "  out %0,r22\n"		\
+  "  ldi r22,0x80\n"		\
+  "  sts %1,r22\n"		\
+  "  ldi r22,lo8(%2)\n"		\
+  "  push r22\n"		\
+  "  ldi r22,hi8(%2)\n"		\
+  "  push r22\n"		\
+  "  in r22,%0\n"		\
+  "  reti\n"			\
+  : : "m"(GPIOR0), "n"(_SFR_MEM_ADDR(PORTE.INTFLAGS), "m"(task_swap))
+#else
+#define OCT_SWISR 			\
+     out GPIOR0,r22		$	\
+     ldi r22,0x80		$	\
+     sts PORTE_INTFLAGS,r22	$	\
+     ldi r22,lo8(task_swap)	$ 	\
+     push r22 			$	\
+     ldi r22,hi8(task_swap)	$	\
+     push r22 			$	\
+     in r22,GPIOR0		$	\
+     sei	 		$ 	\
+     out SREG,r23 		$ 	\
+     reti
+#endif
+
+
 #define OCT_TASK0 0x01
 #define OCT_TASK1 0x02
 #define OCT_TASK2 0x04
@@ -34,20 +65,6 @@
 
 #ifndef __ASSEMBLER__
 #include <stdint.h>
-
-#ifndef OCT_SWINT
-#error "OCT_SWINT() not defined"
-#endif
-
-#define OCT_SWISR() 		\
-  asm("	 ldi r22,lo8(%0)\n"	\
-      "  push r22\n"		\
-      "  ldi r22,hi8(%0)\n"	\
-      "  push r22\n"		\
-      "  reti\n" 		\
-      :				\
-      : "m"(task_swap)		\
-      : "r22" )
 
 void oct_os_init(uint8_t id);
 void oct_attach_task(uint8_t id, void (*fn)(void), uint8_t *sa, uint16_t sz);
@@ -65,16 +82,14 @@ void task_swap();			/* temp */
 
 static inline void oct_isr_wake_task(uint8_t id_set) {
   asm volatile(" mov r24,%0\n"
-	       " call oct_isr_wake_task_1\n"
+	       " call oct_wake_task\n"
 	       : : "r"(id_set) : "r23", "r24", "r25");
-  SW_INTR();
 }
 
 static inline void oct_isr_idle_task(uint8_t id_set) {
   asm volatile(" mov r24,%0\n"
-	       " call oct_idle_task_1\n"
+	       " call oct_idle_task\n"
 	       : : "r"(id_set) : "r23", "r24", "r25");
-  SW_INTR();
 }
 
 static inline uint8_t oct_cur_task(void) {
