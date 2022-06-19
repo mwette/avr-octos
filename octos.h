@@ -24,9 +24,11 @@
 #define OCTOS_H_
 
 
+// This basically makes the ISR look like the executing non-interrupt code
+// made a call to oct_swap_task.  After RETI is executed, the prevous PC
+// is on the stack.
 #define OCT_TMPREG GPIOR0
 #ifndef __ASSEMBLER__
-// FIXME: using GPIOR0 as temp
 #define OCT_SWISR() asm(	\
   "  out %0,r22\n"		\
   "  ldi r22,0x80\n"		\
@@ -37,15 +39,15 @@
   "  push r22\n"		\
   "  in r22,%0\n"		\
   "  reti\n"			\
-  : : "m"(GPIOR0), "n"(_SFR_MEM_ADDR(PORTE.INTFLAGS), "m"(task_swap))
+  : : "m"(GPIOR0), "n"(_SFR_MEM_ADDR(PORTE.INTFLAGS)), "m"(oct_swap_task))
 #else
 #define OCT_SWISR 			\
      out GPIOR0,r22		$	\
      ldi r22,0x80		$	\
      sts PORTE_INTFLAGS,r22	$	\
-     ldi r22,lo8(task_swap)	$ 	\
+     ldi r22,lo8(oct_swap_task)	$ 	\
      push r22 			$	\
-     ldi r22,hi8(task_swap)	$	\
+     ldi r22,hi8(oct_swap_task)	$	\
      push r22 			$	\
      in r22,GPIOR0		$	\
      sei	 		$ 	\
@@ -78,7 +80,7 @@ void oct_isr_wake_task_1(uint8_t id_set);
 
 void oct_spin();
 void oct_rest();
-void task_swap();			/* temp */
+void oct_swap_task();
 
 static inline void oct_isr_wake_task(uint8_t id_set) {
   asm volatile(" mov r24,%0\n"

@@ -21,7 +21,7 @@
  * DEALINGS IN THE SOFTWARE.
 
  * In OctOS:
- * + TASK7 is the idle task, it should be oct_spin or oct_rest
+ * + TASK7 is the idle task; suggest oct_spin or oct_rest
  * + TASK6 is the lowest priority user task, usually main
  * + TASK0 is the highest priority task
 
@@ -31,13 +31,12 @@
  * + TASK2 sets LED bright for about 0.2 s, then sleeps
  * + TCA0 timer wakes TASK2 and TASK3 about every 2 s
 
- * Octos now uses a software interrupt, typically implemented via PORTx:
- * + configure PORTE as input: PORTE.DIR |= 0x80;
- * + set interrupt on toggle: PORTE.PIN7CTRL |= PORT_ISC_BOTHEDGES_gc;
- * + define SWINT() to do toggle: "  sts %1,0x80"
+ * Octos now uses a software interrupt, here implemented via PORTE:
+ * + Configure PORTE as input: PORTE.DIR |= 0x80;
+ * + Set interrupt on toggle: PORTE.PIN7CTRL |= PORT_ISC_BOTHEDGES_gc.
+ * + Define SWINT, SWISR as in in octos.h
 
  */
-#define FOR_SIM 1
 
 #ifdef F_CPU
 #undef F_CPU
@@ -48,15 +47,6 @@
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
 #include <util/delay.h>
-
-#if 0
-#define OCT_SWINT() 	\
-  asm(" ldi r24,0x80\n"	\
-      " sts %0,r24\n"	\
-      :			\
-      : "n"(_SFR_MEM_ADDR(PORTE.OUTTGL)) \
-      : "r24")
-#endif
 
 #include "octos.h"
 
@@ -76,23 +66,18 @@ ISR(TCA0_OVF_vect) {
 
 /* ---------------------------------------------------------------------------*/
 
-/*
- * Alignment on stacks is just for help in debugging. 
- */
-
-#if FOR_SIM
-#define T2_ITER 1500
-#define T3_ITER 3000
-#else
 #define T2_ITER 15000
 #define T3_ITER 30000
-#endif
+#define T2_STKSZ 0x40
+#define T3_STKSZ 0x40
+#define T7_STKSZ 0x20
 
-#define STKSIZ2 0x40
-uint8_t task2_stk[STKSIZ2] __attribute__((aligned(16)));
+/* Alignment on stacks is to help w/ my debugging. */
+
+uint8_t task2_stk[T2_STKSZ] __attribute__((aligned(16)));
 
 void __attribute__((OS_task)) task2(void) {
-  sei();				/* per task status register */
+  sei();				/* since per task status register */
   while (1) {
     oct_idle_task(OCT_TASK2);
     for (int i = 0; i < T2_ITER; i++) {
@@ -104,8 +89,7 @@ void __attribute__((OS_task)) task2(void) {
   }
 }
 
-#define STKSIZ3 0x40
-uint8_t task3_stk[STKSIZ3] __attribute__((aligned(16)));
+uint8_t task3_stk[T3_STKSZ] __attribute__((aligned(16)));
 
 void __attribute__((OS_task)) task3(void) {
   sei();
@@ -120,10 +104,11 @@ void __attribute__((OS_task)) task3(void) {
   }
 }
 
-#define STKSIZ7 0x40
-uint8_t task7_stk[STKSIZ7] __attribute__((aligned(16)));
+uint8_t task7_stk[T7_STKSZ] __attribute__((aligned(16)));
 
 /* ---------------------------------------------------------------------------*/
+
+void nano_button_wait();
 
 void init_sys_clk() {
   _PROTECTED_WRITE(CLKCTRL.MCLKCTRLA, CLKCTRL_CLKSEL_OSC20M_gc);
@@ -132,36 +117,24 @@ void init_sys_clk() {
 }
 
 void init_wdt() {
-#if !FOR_SIM
   _PROTECTED_WRITE(WDT.CTRLA, WDT_PERIOD_8KCLK_gc); /* 8 sec watchdog */
-#endif
 }
 
 void init_tca() {
-#if FOR_SIM
-  TCA0.SINGLE.PER = 3*9745;
-  TCA0.SINGLE.CTRLB = TCA_SINGLE_WGMODE_NORMAL_gc;
-  TCA0.SINGLE.CTRLA = TCA_SINGLE_CLKSEL_DIV16_gc | TCA_SINGLE_ENABLE_bm;
-  //TCA0.SINGLE.INTCTRL = TCA_SINGLE_OVF_bm;
-#else
   TCA0.SINGLE.PER = 3*9745;
   TCA0.SINGLE.CTRLB = TCA_SINGLE_WGMODE_NORMAL_gc;
   TCA0.SINGLE.CTRLA = TCA_SINGLE_CLKSEL_DIV256_gc | TCA_SINGLE_ENABLE_bm;
-  //TCA0.SINGLE.INTCTRL = TCA_SINGLE_OVF_bm;
-#endif
 }
 
-void nano_button_wait();
-
 void main(void) {
-  if (SYSCFG.REVID < 0xFF) nano_button_wait(); /* on nano wait for button */
+  if (SYSCFG.REVID < 0xFF) nano_button_wait(); /* not sim: wait for button */
 
   PORTE.PIN7CTRL |= PORT_ISC_BOTHEDGES_gc; /* enable software intr */
 
   oct_os_init(OCT_TASK6);
-  oct_attach_task(OCT_TASK7, oct_spin, task7_stk, STKSIZ7);
-  oct_attach_task(OCT_TASK3, task3, task3_stk, STKSIZ3);
-  oct_attach_task(OCT_TASK2, task2, task2_stk, STKSIZ2);
+  oct_attach_task(OCT_TASK7, oct_spin, task7_stk, T7_STKSZ); /* required */
+  oct_attach_task(OCT_TASK3, task3, task3_stk, T3_STKSZ);
+  oct_attach_task(OCT_TASK2, task2, task2_stk, T2_STKSZ);
 
   init_sys_clk();			/* init clock to 5 MHz */
   init_wdt();				/* init WDT to 8 sec */
@@ -185,7 +158,9 @@ void main(void) {
   }
 }
 
-/* Flash LED and wait for user button press to start application code. */
+/* ---------------------------------------------------------------------------*/
+
+/* Flash LED and wait for button press to start application code. */
 void nano_button_wait() {
   uint8_t st = 1;			/* switch state */
   uint8_t lc;				/* led counter */

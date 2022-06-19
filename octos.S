@@ -41,99 +41,48 @@
 ;;; 2) in resched, break if swap-in TCB is 0x0000
 
 
-;;; === OctOS =================================================================
-
-;;; If feel brave and asm-code all non-main tasks to use a reduced set of
-;;; registers, you can reduce callee reg set to make context switches faster.
-
 #define PORTE_OUTTGL 0x0487
 #ifndef OCT_SWINT
 #define OCT_SWINT ldi r24,0x80 $ sts PORTE_OUTTGL,r24
 #endif
 	
-#define OCT_TASK7 0x80
-	
+;;; === OctOS =================================================================
+
+;;; If you feel brave and you asm-code all non-main tasks to use a reduced set
+;;; of registers, you can reduce callee reg set to make context switches faster.
+
 #define PUSH_OSUTIL_REGS \
-	push r23 $ \
-	push r24 $ \
-	push r25
+	push r23 $ push r24 $ push r25
 	
 #define POP_OSUTIL_REGS \
-	pop r25 $ \
-	pop r24 $ \
-	pop r23
+	pop r25 $ pop r24 $ pop r23
 	
 #define PUSH_CALLER_REGS \
-	push r18 $ \
-	push r19 $ \
-	push r20 $ \
-	push r21 $ \
-	push r22 $ \
-	push r26 $ \
-	push r27 $ \
-	push r30 $ \
-	push r31
+	push r18 $ push r19 $ push r20 $ push r21 $ push r22 $ \
+	push r26 $ push r27 $ push r30 $ push r31
 
 #define POP_CALLER_REGS \
-	pop r31 $ \
-	pop r30 $ \
-	pop r27 $ \
-	pop r26 $ \
-	pop r22 $ \
-	pop r21 $ \
-	pop r20 $ \
-	pop r19 $ \
-	pop r18
+	pop r31  $ pop r30  $ pop r27  $ pop r26  $ pop r22  $ \
+	pop r21  $ pop r20  $ pop r19  $ pop r18
 
 #define PUSH_CALLEE_REGS \
-	push r0 $ \
-	push r1 $ \
-	push r2 $ \
-	push r3 $ \
-	push r4 $ \
-	push r5 $ \
-	push r6 $ \
-	push r7 $ \
-	push r8 $ \
-	push r9 $ \
-	push r10 $ \
-	push r11 $ \
-	push r12 $ \
-	push r13 $ \
-	push r14 $ \
-	push r15 $ \
-	push r16 $ \
-	push r17 $ \
-	push r28 $ \
-	push r29
+	push r0  $ push r1  $ push r2  $ push r3  $ push r4  $ \
+	push r5  $ push r6  $ push r7  $ push r8  $ push r9  $ \
+	push r10 $ push r11 $ push r12 $ push r13 $ push r14 $ \
+	push r15 $ push r16 $ push r17 $ push r28 $ push r29
 
 #define POP_CALLEE_REGS \
-	pop r29 $ \
-	pop r28 $ \
-	pop r17 $ \
-	pop r16 $ \
-	pop r15 $ \
-	pop r14 $ \
-	pop r13 $ \
-	pop r12 $ \
-	pop r11 $ \
-	pop r10 $ \
-	pop r9 $ \
-	pop r8 $ \
-	pop r7 $ \
-	pop r6 $ \
-	pop r5 $ \
-	pop r4 $ \
-	pop r3 $ \
-	pop r2 $ \
-	pop r1 $ \
-	pop r0
+	pop r29  $ pop r28  $ pop r17  $ pop r16  $ pop r15  $ \
+	pop r14  $ pop r13  $ pop r12  $ pop r11  $ pop r10  $ \
+	pop r9   $ pop r8   $ pop r7   $ pop r6   $ pop r5   $ \
+	pop r4   $ pop r3   $ pop r2   $ pop r1   $ pop r0
 
-;; #define OCT_NSAVREG 20
 #define OCT_NSAVREG 32
 
 #define PUSH_OTHER_REGS PUSH_CALLER_REGS $ PUSH_CALLEE_REGS
 #define POP_OTHER_REGS POP_CALLEE_REGS $ POP_CALLER_REGS
+
+#define OCT_TASK7 0x80
 	
 	.equ SPL,0x3D
 	.equ SPH,0x3E
@@ -148,8 +97,7 @@
 	.global oct_wake_task
 	.global oct_spin
 	.global oct_rest
-
-	.global task_swap	; temp
+	.global oct_swap_task
 
 	.section .data
 	.global oct_curmask
@@ -277,8 +225,9 @@ oct_wake_task:
 	sts oct_rdylist,r25
 	lds r24,oct_curmask
 	and r25,r24
+	breq 1f
 	OCT_SWINT
-	out SREG,r23
+1:	out SREG,r23
 	ret
 	.size oct_wake_task, .-oct_wake_task
 
@@ -298,9 +247,9 @@ oct_idle_task:
 	ret
 	.size oct_idle_task, .-oct_idle_task
 
-	;; void task_swap()
-	.type task_swap,function
-task_swap:
+	;; void oct_swap_task()
+	.type oct_swap_task,function
+oct_swap_task:
 	;; move following to SWINT?
 	PUSH_OSUTIL_REGS	; push r23, r24, r25
 	in r23,SREG
@@ -377,6 +326,6 @@ swap_body:
 	out SREG,r23		; restore SREG
 	POP_OSUTIL_REGS
 	ret
-	.size task_swap, .-task_swap
+	.size oct_swap_task, .-oct_swap_task
 
 ;;; --- last line ---
