@@ -7,22 +7,25 @@ OBJDUMP = $(TOOL_BIN)/avr-objdump
 
 CFLAGS = -Os -I.. -mmcu=atmega4809 -B/opt/local/avr/packs/mega
 
-all: main.hex main.asm
+all: main.hex main.asm swintr.hex swintr.asm
+
+octos.o: ../octos.S
+	$(CC) -o $@ -c $(CFLAGS) $^
 
 main.elf: main.o octos.o
 	$(CC) $(CFLAGS) -o $@ $^
 
-main.hex: main.elf
+%.o: %.c
+	$(CC) -o $@ -c $(CFLAGS) $^
+
+%.elf: %.c
+	$(CC) -o $@ $(CFLAGS) $^
+
+%.hex: %.elf
 	$(OBJCOPY) -O ihex $^ $@
 
-octos.o: ../octos.S
-	$(CC) $(CFLAGS) -c $^ -o $@
-
-main.o: main.c ../octos.h
-	$(CC) $(CFLAGS) -c main.c -o main.o
-
-main.asm: main.elf
-	$(OBJDUMP) -d main.elf > main.asm
+%.asm: %.elf
+	$(OBJDUMP) -d $^ > $@
 
 clean:
 	rm -f *.o *.elf *.hex *.asm
