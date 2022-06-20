@@ -56,7 +56,10 @@ void main(void) {
   PORTF.OUTSET = PIN5_bm;		/* LED off */
 
   PORTE.DIRSET = PIN7_bm;		/* PORTE as SW intr */
-  PORTE.PIN7CTRL |= PORT_ISC_BOTHEDGES_gc; /* enable software intr */
+  PORTE.PIN7CTRL = PORT_PULLUPEN_bm | PORT_ISC_BOTHEDGES_gc;
+  PORTE.DIRCLR = PIN7_bm;		/* PORTE as SW intr */
+  PORTE.PIN7CTRL = PORT_PULLUPEN_bm | PORT_ISC_BOTHEDGES_gc;
+  // ^ pullup-enable doesn't help
   
   sei();
   TCA0.SINGLE.INTCTRL = TCA_SINGLE_ENABLE_bm; /* start timer */

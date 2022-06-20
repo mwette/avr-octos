@@ -51,31 +51,32 @@
 #include "octos.h"
 
 ISR(PORTE_PORT_vect, ISR_NAKED) {
-  asm("  ldi r22,0x80\n"
-      "  sts %0,r22\n"
-      :
-      : "n"(_SFR_MEM_ADDR(PORTE.INTFLAGS))
-      : "r22");
-  OCT_SWISR();
+  /* Ack the PORT interrupt. */
+  asm("  ldi r22,0x80\n  sts %0,r22\n"
+      : : "n"(_SFR_MEM_ADDR(PORTE.INTFLAGS)) : "r22");
+  /* Bring in the task swapper.   See octos.h */ 
+  OCT_SWISR();			
 }
 
 ISR(TCA0_OVF_vect) {
   TCA0.SINGLE.INTFLAGS = TCA_SINGLE_ENABLE_bm;
-  oct_isr_wake_task(OCT_TASK2 | OCT_TASK3);
+  oct_isr_wake_task(OCT_TASK2 | OCT_TASK3); /* Enable T2 and T3. */
+  PORTE.OUTTGL = 0x80;
 }
 
 /* ---------------------------------------------------------------------------*/
 
-#define T2_ITER 15000
-#define T3_ITER 30000
-#define T2_STKSZ 0x40
-#define T3_STKSZ 0x40
-#define T7_STKSZ 0x20
+#define T2_ITER 15000			/* iterations before idle */
+#define T3_ITER 30000			/* iterations before idle */
+#define T2_STKSZ 0x40			/* task2 stacksize */
+#define T3_STKSZ 0x40			/* task3 stacksize */
+#define T7_STKSZ 0x20			/* task7 (idle) stacksize */
 
-/* Alignment on stacks is to help w/ my debugging. */
+/* Alignment on stacks is to aid my debugging. */
 
 uint8_t task2_stk[T2_STKSZ] __attribute__((aligned(16)));
 
+/* Make LED bright. */
 void __attribute__((OS_task)) task2(void) {
   sei();				/* since per task status register */
   while (1) {
@@ -91,6 +92,7 @@ void __attribute__((OS_task)) task2(void) {
 
 uint8_t task3_stk[T3_STKSZ] __attribute__((aligned(16)));
 
+/* Make LED medium. */
 void __attribute__((OS_task)) task3(void) {
   sei();
   while (1) {
@@ -129,25 +131,26 @@ void init_tca() {
 void main(void) {
   if (SYSCFG.REVID < 0xFF) nano_button_wait(); /* not sim: wait for button */
 
-  PORTE.PIN7CTRL |= PORT_ISC_BOTHEDGES_gc; /* enable software intr */
-
   oct_os_init(OCT_TASK6);
   oct_attach_task(OCT_TASK7, oct_spin, task7_stk, T7_STKSZ); /* required */
   oct_attach_task(OCT_TASK3, task3, task3_stk, T3_STKSZ);
   oct_attach_task(OCT_TASK2, task2, task2_stk, T2_STKSZ);
+  PORTE.PIN7CTRL = PORT_ISC_BOTHEDGES_gc; /* enable software intr */
+  PORTE.DIRSET = PIN7_bm;		/* SW intr; needed ??? */
 
   init_sys_clk();			/* init clock to 5 MHz */
   init_wdt();				/* init WDT to 8 sec */
   init_tca();				/* init TCA to 3 sec */
 
-  sei();
-
+  PORTF.DIRSET = PIN5_bm;		/* LED pin as output */
+  PORTF.OUTSET = PIN5_bm;		/* LED off */
+  
   oct_wake_task(OCT_TASK3 | OCT_TASK2);	/* let tasks initialize */
   
-  PORTF.DIRSET = PIN5_bm;		/* LED output */
-  PORTF.OUTSET = PIN5_bm;		/* LED off */
+  sei();
+  TCA0.SINGLE.INTCTRL = TCA_SINGLE_ENABLE_bm; /* start timer */
 
-  TCA0.SINGLE.INTCTRL = TCA_SINGLE_OVF_bm;
+  /* Make LED dim. */
   while (1) {
     wdt_reset();
 
