@@ -1,4 +1,38 @@
 
+#if 0
+//attiny3217 nano board
+
+#include <avr/io.h>
+#include <avr/interrupt.h>
+
+static void ledToggle() {
+  PORTA.DIRSET = PIN3_bm;
+  PORTA.OUTTGL = PIN3_bm;
+}
+
+static void PB7irq(){
+  PORTB.PIN7CTRL = 1;
+  PORTB.DIRSET = PIN7_bm;
+  PORTB.OUTTGL = PIN7_bm;
+}
+
+ISR(PORTB_PORT_vect){
+    uint8_t flags = PORTB.INTFLAGS;
+    if (flags & PIN7_bm) ledToggle();
+    PORTB.INTFLAGS = flags;
+}
+
+int main(){
+    sei();
+    while (1) {
+      PB7irq();
+      __builtin_avr_delay_cycles(3333333ul/2); //1Hz blink
+    }
+}
+
+#endif
+
+
 #ifdef F_CPU
 #undef F_CPU
 #endif
@@ -10,6 +44,7 @@
 #include <util/delay.h>
 
 #define TRY_DIRECT 0
+#define USE_EVSYS  0
 
 volatile uint8_t dim = 0;
 
@@ -17,13 +52,15 @@ ISR(TCA0_OVF_vect) {
   TCA0.SINGLE.INTFLAGS = TCA_SINGLE_ENABLE_bm;
 #if TRY_DIRECT
   dim = 1;
+#elif USE_EVSYS
+  EVSYS.STROBE = PIN3_bm;
 #else
-  PORTE.OUTTGL = PIN7_bm;
+  PORTE.OUTTGL = PIN0_bm;
 #endif
 }
 
 ISR(PORTE_PORT_vect) {
-  PORTE.INTFLAGS |= PIN7_bm;
+  PORTE.INTFLAGS = PIN0_bm;
   dim = 1;
 }
 
@@ -55,14 +92,20 @@ void main(void) {
   PORTF.DIRSET = PIN5_bm;		/* LED pin as output */
   PORTF.OUTSET = PIN5_bm;		/* LED off */
 
-  PORTE.DIRSET = PIN7_bm;		/* PORTE as SW intr */
-  PORTE.PIN7CTRL = PORT_PULLUPEN_bm | PORT_ISC_BOTHEDGES_gc;
-  PORTE.DIRCLR = PIN7_bm;		/* PORTE as SW intr */
-  PORTE.PIN7CTRL = PORT_PULLUPEN_bm | PORT_ISC_BOTHEDGES_gc;
-  // ^ pullup-enable doesn't help
+#if USE_EVSYS
+  /* SW intr via event system to PORTE interrupt: EVSYS.STROBE = PIN2_bm */
+  PORTE.DIRCLR = PIN2_bm;
+  PORTE.PIN2CTRL = PORT_ISC_BOTHEDGES_gc;
+  EVSYS.USEREVOUTE = EVSYS_CHANNEL_CHANNEL3_gc;
+#else
+  /* does not work :( */
+  PORTE.PIN0CTRL = PORT_ISC_BOTHEDGES_gc;
+  PORTE.DIRSET = PIN0_bm;		/* PORTE as SW intr */
+#endif
   
   sei();
-  TCA0.SINGLE.INTCTRL = TCA_SINGLE_ENABLE_bm; /* start timer */
+  TCA0.SINGLE.CTRLESET = TCA_SINGLE_CMD_RESTART_gc; /* restart timeer */
+  TCA0.SINGLE.INTCTRL = TCA_SINGLE_ENABLE_bm; /* enable timer intr */
 
   /* Make LED dim. */
   while (1) {
@@ -79,6 +122,8 @@ void main(void) {
       PORTF.OUTSET = PIN5_bm;
       _delay_us(5);
     }
+
+    //if (PORTF.IN & PIN6_bm) break;
   }
 }
 
@@ -109,7 +154,3 @@ void nano_button_wait() {
   TCB0.CCMP = 0;
   TCB0.INTFLAGS = 0x01;
 }
-
-/* --- last line --- */
-
-

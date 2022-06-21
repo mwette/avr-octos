@@ -33,7 +33,7 @@
 
  * Octos now uses a software interrupt, here implemented via PORTE:
  * + Configure PORTE as input: PORTE.DIR |= 0x80;
- * + Set interrupt on toggle: PORTE.PIN7CTRL |= PORT_ISC_BOTHEDGES_gc.
+ * + Set interrupt on toggle: PORTE.PIN0CTRL |= PORT_ISC_BOTHEDGES_gc.
  * + Define SWINT, SWISR as in in octos.h
 
  */
@@ -50,6 +50,8 @@
 
 #include "octos.h"
 
+#define USE_EVSYS 0
+
 ISR(PORTE_PORT_vect, ISR_NAKED) {
   /* Ack the PORT interrupt. */
   asm("  ldi r22,0x80\n  sts %0,r22\n"
@@ -61,7 +63,11 @@ ISR(PORTE_PORT_vect, ISR_NAKED) {
 ISR(TCA0_OVF_vect) {
   TCA0.SINGLE.INTFLAGS = TCA_SINGLE_ENABLE_bm;
   oct_isr_wake_task(OCT_TASK2 | OCT_TASK3); /* Enable T2 and T3. */
-  PORTE.OUTTGL = 0x80;
+#if USE_EVSYS
+  EVSYS.STROBE = EVSYS_CHANNEL7_bm;
+#else
+  PORTE.OUTTGL = PIN0_bm;
+#endif
 }
 
 /* ---------------------------------------------------------------------------*/
@@ -135,8 +141,16 @@ void main(void) {
   oct_attach_task(OCT_TASK7, oct_spin, task7_stk, T7_STKSZ); /* required */
   oct_attach_task(OCT_TASK3, task3, task3_stk, T3_STKSZ);
   oct_attach_task(OCT_TASK2, task2, task2_stk, T2_STKSZ);
-  PORTE.PIN7CTRL = PORT_ISC_BOTHEDGES_gc; /* enable software intr */
-  PORTE.DIRSET = PIN7_bm;		/* SW intr; needed ??? */
+#if USE_EVSYS
+  /* SW intr via event system to PORTE interrupt: EVSYS.STROBE = PIN2_bm */
+  PORTE.DIRCLR = PIN2_bm;
+  PORTE.PIN2CTRL = PORT_ISC_BOTHEDGES_gc;
+  EVSYS.USEREVOUTE = EVSYS_CHANNEL_CHANNEL7_gc;
+#else
+  /* SW intr via PORTE PIN0 */
+  PORTE.DIRSET = PIN0_bm;
+  PORTE.PIN0CTRL = PORT_ISC_BOTHEDGES_gc;
+#endif
 
   init_sys_clk();			/* init clock to 5 MHz */
   init_wdt();				/* init WDT to 8 sec */
@@ -148,6 +162,7 @@ void main(void) {
   oct_wake_task(OCT_TASK3 | OCT_TASK2);	/* let tasks initialize */
   
   sei();
+  TCA0.SINGLE.CTRLESET = TCA_SINGLE_CMD_RESTART_gc; /* restart timeer */
   TCA0.SINGLE.INTCTRL = TCA_SINGLE_ENABLE_bm; /* start timer */
 
   /* Make LED dim. */
