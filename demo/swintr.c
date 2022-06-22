@@ -50,6 +50,7 @@ volatile uint8_t dim = 0;
 
 ISR(TCA0_OVF_vect) {
   TCA0.SINGLE.INTFLAGS = TCA_SINGLE_ENABLE_bm;
+#if 0
 #if TRY_DIRECT
   dim = 1;
 #elif USE_EVSYS
@@ -57,6 +58,8 @@ ISR(TCA0_OVF_vect) {
 #else
   PORTE.OUTTGL = PIN0_bm;
 #endif
+#endif
+  PORTF.OUTTGL = PIN5_bm;
 }
 
 ISR(PORTE_PORT_vect) {
@@ -111,6 +114,7 @@ void main(void) {
   while (1) {
     wdt_reset();
 
+#if 0
     if (dim) {
       PORTF.OUTCLR = PIN5_bm;
       _delay_us(1);
@@ -122,8 +126,7 @@ void main(void) {
       PORTF.OUTSET = PIN5_bm;
       _delay_us(5);
     }
-
-    //if (PORTF.IN & PIN6_bm) break;
+#endif
   }
 }
 

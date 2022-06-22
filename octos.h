@@ -23,11 +23,17 @@
 #ifndef OCTOS_H_
 #define OCTOS_H_
 
-// This basically makes the ISR look like the executing non-interrupt code
-// made a call to oct_swap_task.  After RETI is executed, the prevous PC
-// is on the stack.
-#define OCT_TMPREG GPIOR0
 #ifndef __ASSEMBLER__
+#ifndef OCT_TMPREG
+#define OCT_TMPREG GPIOR0
+#endif
+#ifndef OCT_PORT
+#define OCT_PORT PORTE
+#endif
+#ifndef OCT_PIN_bm
+#define OCT_PIN PIN0_bm
+#endif
+#ifndef OCT_SWISR
 #define OCT_SWISR() asm(	\
   "  out %0,r22\n"		\
   "  ldi r22,%1\n"		\
@@ -38,22 +44,12 @@
   "  push r22\n"		\
   "  in r22,%0\n"		\
   "  reti\n"			\
-  :: "m"(GPIOR0), "n"(PIN0_bm), \
-     "n"(_SFR_MEM_ADDR(PORTE.INTFLAGS)), "m"(oct_swap_task))
-// add PIN0
-#else
-#define OCT_SWISR 			\
-     out GPIOR0,r22		$	\
-     ldi r22,PIN0_bm		$	\
-     sts PORTE_INTFLAGS,r22	$	\
-     ldi r22,lo8(oct_swap_task)	$ 	\
-     push r22 			$	\
-     ldi r22,hi8(oct_swap_task)	$	\
-     push r22 			$	\
-     in r22,GPIOR0		$	\
-     sei	 		$ 	\
-     out SREG,r23 		$ 	\
-     reti
+  :: "m"(OCT_TMPREG), "n"(OCT_PIN_bm), \
+     "n"(_SFR_MEM_ADDR(OCT_PORT.INTFLAGS)), "m"(oct_swap_task))
+// The above code basically makes the ISR look like the
+// executing non-interrupt code made a call to oct_swap_task.
+// After RETI is executed, the previous PC is on the stack.
+#endif
 #endif
 
 #define OCT_TASK0 0x01
@@ -72,26 +68,12 @@ void oct_os_init(uint8_t id);
 void oct_attach_task(uint8_t id, void (*fn)(void), uint8_t *sa, uint16_t sz);
 void oct_detach_task(uint8_t id);
 
-void oct_idle_task(uint8_t id_set);
-void oct_wake_task(uint8_t id_set);
+void oct_idle_task(uint8_t id_set) __attribute__((noinline));
+void oct_wake_task(uint8_t id_set) __attribute__((noinline));
 
 void oct_spin();
 void oct_rest();
 void oct_swap_task();
-
-#if 0
-static inline void oct_isr_wake_task(uint8_t id_set) {
-  asm volatile(" mov r24,%0\n"
-	       " call oct_wake_task\n"
-	       : : "r"(id_set) : "r23", "r24", "r25");
-}
-
-static inline void oct_isr_idle_task(uint8_t id_set) {
-  asm volatile(" mov r24,%0\n"
-	       " call oct_idle_task\n"
-	       : : "r"(id_set) : "r23", "r24", "r25");
-}
-#endif
 
 static inline uint8_t oct_cur_task(void) {
   extern uint8_t oct_curmask;

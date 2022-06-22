@@ -40,14 +40,15 @@
 ;;; 1) check for opportunities to save insn's using CPI, CPSE
 ;;; 2) in resched, break if swap-in TCB is 0x0000
 
-
-#define PORTE_OUTTGL 0x0487
-#define PIN0_bm 0x01
-#ifndef OCT_SWINT
-#define OCT_SWINT ldi r24,PIN0_bm $ sts PORTE_OUTTGL,r24
+#ifndef OCT_PORT_OUTTGL
+#define OCT_PORT_OUTTGL 0x487
 #endif
-;; ^ SWINT can use r24 and r25
-
+#ifndef OCT_PIN_bm
+#define OCT_PIN_bm 0x01
+#endif
+#ifndef OCT_SWINT
+#define OCT_SWINT ldi r24,OCT_PIN_bm $ sts OCT_PORT_OUTTGL,r24
+#endif
 	
 ;;; === OctOS =================================================================
 
@@ -96,8 +97,7 @@
 	.global oct_swap_task
 
 	.section .progmem
-oct_version:
-	.byte 0x22, 0x06, 0x22, 0xa
+	.asciz "OctOS v220622c"
 
 	.section .data
 	.global oct_curmask
