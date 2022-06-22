@@ -30,19 +30,21 @@
 #ifndef __ASSEMBLER__
 #define OCT_SWISR() asm(	\
   "  out %0,r22\n"		\
-  "  ldi r22,0x80\n"		\
-  "  sts %1,r22\n"		\
-  "  ldi r22,lo8(%2)\n"		\
+  "  ldi r22,%1\n"		\
+  "  sts %2,r22\n"		\
+  "  ldi r22,lo8(%3)\n"		\
   "  push r22\n"		\
-  "  ldi r22,hi8(%2)\n"		\
+  "  ldi r22,hi8(%3)\n"		\
   "  push r22\n"		\
   "  in r22,%0\n"		\
   "  reti\n"			\
-  : : "m"(GPIOR0), "n"(_SFR_MEM_ADDR(PORTE.INTFLAGS)), "m"(oct_swap_task))
+  :: "m"(GPIOR0), "n"(PIN0_bm), \
+     "n"(_SFR_MEM_ADDR(PORTE.INTFLAGS)), "m"(oct_swap_task))
+// add PIN0
 #else
 #define OCT_SWISR 			\
      out GPIOR0,r22		$	\
-     ldi r22,0x80		$	\
+     ldi r22,PIN0_bm		$	\
      sts PORTE_INTFLAGS,r22	$	\
      ldi r22,lo8(oct_swap_task)	$ 	\
      push r22 			$	\

@@ -23,16 +23,18 @@
  * In OctOS:
  * + TASK7 is the idle task; suggest oct_spin or oct_rest
  * + TASK6 is the lowest priority user task, usually main
+ *   ...
  * + TASK0 is the highest priority task
 
  * This demo has main (TASK6) and two other tasks.
- * + TASK6 sets LED dim while running
- * + TASK3 sets LED medium for about 0.5 s, then sleeps
- * + TASK2 sets LED bright for about 0.2 s, then sleeps
- * + TCA0 timer wakes TASK2 and TASK3 about every 2 s
+ * + TCA0 timer ISR callec about ever 1.5 s and wakes TASK2 and TASK3
+ * + TASK2 sets LED bright for about 0.25 s, then goes idle
+ * + TASK3 sets LED medium for about 0.50 s, then goes idle
+ * + TASK6 sets LED dim when TASK2 and TASK3 are idle
+ * + TAKS7 should never be called
 
  * Octos now uses a software interrupt, here implemented via PORTE:
- * + Configure PORTE as input: PORTE.DIR |= 0x80;
+ * + Configure PORTE as input: PORTE.DIR = PIN0_bm;
  * + Set interrupt on toggle: PORTE.PIN0CTRL |= PORT_ISC_BOTHEDGES_gc.
  * + Define SWINT, SWISR as in in octos.h
 
@@ -62,8 +64,8 @@ ISR(TCA0_OVF_vect) {
 
 /* ---------------------------------------------------------------------------*/
 
-#define T2_ITER 15000			/* iterations before idle */
-#define T3_ITER 30000			/* iterations before idle */
+#define T2_ITER 25000u			/* iterations before idle */
+#define T3_ITER 50000u			/* iterations before idle */
 #define T2_STKSZ 0x40			/* task2 stacksize */
 #define T3_STKSZ 0x40			/* task3 stacksize */
 #define T7_STKSZ 0x20			/* task7 (idle) stacksize */
@@ -74,12 +76,12 @@ uint8_t task2_stk[T2_STKSZ] __attribute__((aligned(16)));
 
 /* Make LED bright. */
 void __attribute__((OS_task)) task2(void) {
-  sei();				/* since per task status register */
+  sei();				/* since SREG is per task */
   while (1) {
     oct_idle_task(OCT_TASK2);
-    for (int i = 0; i < T2_ITER; i++) {
+    for (uint16_t i = 0; i < T2_ITER; i++) {
       PORTF.OUTCLR = PIN5_bm;
-      _delay_us(9);
+      _delay_us(8);
       PORTF.OUTSET = PIN5_bm;
       _delay_us(1);
     }
@@ -93,11 +95,11 @@ void __attribute__((OS_task)) task3(void) {
   sei();
   while (1) {
     oct_idle_task(OCT_TASK3);
-    for (int i = 0; i < T3_ITER; i++) {
+    for (uint16_t i = 0; i < T3_ITER; i++) {
       PORTF.OUTCLR = PIN5_bm;
       _delay_us(2);
       PORTF.OUTSET = PIN5_bm;
-      _delay_us(8);
+      _delay_us(7);
     }
   }
 }
@@ -143,10 +145,11 @@ void main(void) {
   PORTF.DIRSET = PIN5_bm;		/* LED pin as output */
   PORTF.OUTSET = PIN5_bm;		/* LED off */
   
+  sei();
+
   oct_wake_task(OCT_TASK3 | OCT_TASK2);	/* let tasks initialize */
   
-  sei();
-  TCA0.SINGLE.CTRLESET = TCA_SINGLE_CMD_RESTART_gc; /* restart timeer */
+  TCA0.SINGLE.CTRLESET = TCA_SINGLE_CMD_RESTART_gc; /* reset timer */
   TCA0.SINGLE.INTCTRL = TCA_SINGLE_ENABLE_bm; /* start timer */
 
   /* Make LED dim. */

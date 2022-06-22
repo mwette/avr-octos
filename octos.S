@@ -42,13 +42,17 @@
 
 
 #define PORTE_OUTTGL 0x0487
+#define PIN0_bm 0x01
 #ifndef OCT_SWINT
-#define OCT_SWINT ldi r24,0x80 $ sts PORTE_OUTTGL,r24
+#define OCT_SWINT ldi r24,PIN0_bm $ sts PORTE_OUTTGL,r24
 #endif
+;; ^ SWINT can use r24 and r25
 
 	
 ;;; === OctOS =================================================================
 
+#define OCT_TASK7 0x80
+	
 ;;; If you feel brave and you asm-code all non-main tasks to use a reduced set
 ;;; of registers, you can reduce callee reg set to make context switches faster.
 
@@ -61,21 +65,21 @@
 	pop  r23 $ pop  r22 $ pop  r21 $ pop  r20 $ pop  r19 $ pop  r18
 
 #define PUSH_CALLEE_REGS \
-	push r0  $ push r1  $ push r2  $ push r3  $ push r4  $ \
-	push r5  $ push r6  $ push r7  $ push r8  $ push r9  $ \
-	push r10 $ push r11 $ push r12 $ push r13 $ push r14 $ \
-	push r15 $ push r16 $ push r17 $ push r28 $ push r29
+	push r0  $ push r1  $ push r2  $ push r3  $ push r4  $ push r5  $ \
+	push r6  $ push r7  $ push r8  $ push r9  $ push r10 $ push r11 $ \
+	push r12 $ push r13 $ push r14 $ push r15 $ push r16 $ push r17 $ \
+	push r28 $ push r29
 
 #define POP_CALLEE_REGS \
-	pop r29  $ pop r28  $ pop r17  $ pop r16  $ pop r15  $ \
-	pop r14  $ pop r13  $ pop r12  $ pop r11  $ pop r10  $ \
-	pop r9   $ pop r8   $ pop r7   $ pop r6   $ pop r5   $ \
-	pop r4   $ pop r3   $ pop r2   $ pop r1   $ pop r0
+	pop r29  $ pop r28  $ pop r17  $ pop r16  $ pop r15  $ pop r14  $ \
+	pop r13  $ pop r12  $ pop r11  $ pop r10  $ pop r9   $ pop r8   $ \
+	pop r7   $ pop r6   $ pop r5   $ pop r4   $ pop r3   $ pop r2   $ \
+	pop r1   $ pop r0
 
-#define OCT_NSAVREG 20
+#define PUSH_REGS  PUSH_CALLEE_REGS
+#define POP_REGS   POP_CALLEE_REGS
+#define NSAVREG    20
 
-#define OCT_TASK7 0x80
-	
 	.equ SPL,0x3D
 	.equ SPH,0x3E
 	.equ SREG,0x3F
@@ -90,6 +94,10 @@
 	.global oct_spin
 	.global oct_rest
 	.global oct_swap_task
+
+	.section .progmem
+oct_version:
+	.byte 0x22, 0x06, 0x22, 0xa
 
 	.section .data
 	.global oct_curmask
@@ -182,7 +190,7 @@ oct_attach_task:
 	st -X,r22
 	st -X,r23
 	;; room for registers plus sreg
-	sbiw X,OCT_NSAVREG+1
+	sbiw X,NSAVREG+1
 	;; save mask
 	st -X,r25
 	;; adjust for pop pre increment
@@ -207,7 +215,9 @@ oct_detach_task:
 	.size oct_detach_task, .-oct_detach_task
 	
 	;; void oct_wake_task(uint8_t id_set)
-	;; id: or'd ids of tasks to wake (r24)
+	;;   id: or'd ids of tasks to wake (r24)
+	;; Set task-id bits (id_set) in oct_rdylist.
+	;; Interrupts blocked during this, restored on exit.
 	.type oct_wake_task,function
 oct_wake_task:
 	in r23,SREG
@@ -218,15 +228,15 @@ oct_wake_task:
 	lds r24,oct_curmask
 	and r25,r24
 	breq 1f
-	;;sei
 	OCT_SWINT
-	;;nop
 1:	out SREG,r23
 	ret
 	.size oct_wake_task, .-oct_wake_task
 
-	;; oct_idle_task(uint8_t id)
-	;; id: task ID to idle (r24)
+	;; oct_idle_task(uint8_t id_set)
+	;;   id: task ID to idle (r24)
+	;; Clear task-id bits (id_set) in oct_rdylist.
+	;; Interrupts blocked during this, restored on exit.
 	.type oct_idle_task,function
 oct_idle_task:
 	andi r24,~OCT_TASK7	; never idle task7
@@ -236,9 +246,7 @@ oct_idle_task:
 	lds r25,oct_rdylist
 	and r25,r24
 	sts oct_rdylist,r25
-	;;sei
 	OCT_SWINT
-	;;nop
 	out SREG,r23
 	ret
 	.size oct_idle_task, .-oct_idle_task
@@ -266,7 +274,7 @@ swap_body:
 	;; interrupts enabled in this section
 	sei
 	push r23		; push SREG
-	PUSH_CALLEE_REGS 	; save registers
+	PUSH_REGS 	; save registers
 	push r24		; push curmask
 	;; incoming TCB addr => Y (TODO: if Y is zero, abort)
 	lds r25,oct_rdylist
@@ -296,7 +304,7 @@ swap_body:
 	st Y+,r25		; save outgoing SPH to TCB
 	pop r24			; load curmask
 	sts oct_curmask,r24	;   and restore 
-	POP_CALLEE_REGS		; restore registers
+	POP_REGS		; restore registers
 	pop r23			; load SREG, restore later
 	;; trailer
 	cli
