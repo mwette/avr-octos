@@ -23,8 +23,6 @@
 #ifndef OCTOS_H_
 #define OCTOS_H_
 
-
-
 // This basically makes the ISR look like the executing non-interrupt code
 // made a call to oct_swap_task.  After RETI is executed, the prevous PC
 // is on the stack.
@@ -56,7 +54,6 @@
      reti
 #endif
 
-
 #define OCT_TASK0 0x01
 #define OCT_TASK1 0x02
 #define OCT_TASK2 0x04
@@ -76,13 +73,11 @@ void oct_detach_task(uint8_t id);
 void oct_idle_task(uint8_t id_set);
 void oct_wake_task(uint8_t id_set);
 
-void oct_isr_idle_task_1(uint8_t id_set);
-void oct_isr_wake_task_1(uint8_t id_set);
-
 void oct_spin();
 void oct_rest();
 void oct_swap_task();
 
+#if 0
 static inline void oct_isr_wake_task(uint8_t id_set) {
   asm volatile(" mov r24,%0\n"
 	       " call oct_wake_task\n"
@@ -94,6 +89,7 @@ static inline void oct_isr_idle_task(uint8_t id_set) {
 	       " call oct_idle_task\n"
 	       : : "r"(id_set) : "r23", "r24", "r25");
 }
+#endif
 
 static inline uint8_t oct_cur_task(void) {
   extern uint8_t oct_curmask;
@@ -107,12 +103,8 @@ static inline uint8_t oct_cur_task(void) {
 .global oct_detach_task
 .global oct_idle_task
 .global oct_wake_task
-.global oct_isr_idle_task_1
-.global oct_isr_wake_task_1
 .global oct_spin, oct_rest
-
-#define oct_isr_wake_task oct_wake_task_1
-#define oct_isr_idle_task oct_idle_task_1
+.global oct_swap_task
 
 #endif /* __ASSEMBLER__ */
 

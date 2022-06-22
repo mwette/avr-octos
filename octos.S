@@ -52,19 +52,13 @@
 ;;; If you feel brave and you asm-code all non-main tasks to use a reduced set
 ;;; of registers, you can reduce callee reg set to make context switches faster.
 
-#define PUSH_OSUTIL_REGS \
-	push r23 $ push r24 $ push r25
-	
-#define POP_OSUTIL_REGS \
-	pop r25 $ pop r24 $ pop r23
-	
 #define PUSH_CALLER_REGS \
-	push r18 $ push r19 $ push r20 $ push r21 $ push r22 $ \
-	push r26 $ push r27 $ push r30 $ push r31
+	push r18 $ push r19 $ push r20 $ push r21 $ push r22 $ push r23 $ \
+	push r24 $ push r25 $ push r26 $ push r27 $ push r30 $ push r31
 
 #define POP_CALLER_REGS \
-	pop r31  $ pop r30  $ pop r27  $ pop r26  $ pop r22  $ \
-	pop r21  $ pop r20  $ pop r19  $ pop r18
+	pop  r31 $ pop  r30 $ pop  r27 $ pop  r26 $ pop  r25 $ pop  r24 $ \
+	pop  r23 $ pop  r22 $ pop  r21 $ pop  r20 $ pop  r19 $ pop  r18
 
 #define PUSH_CALLEE_REGS \
 	push r0  $ push r1  $ push r2  $ push r3  $ push r4  $ \
@@ -78,10 +72,7 @@
 	pop r9   $ pop r8   $ pop r7   $ pop r6   $ pop r5   $ \
 	pop r4   $ pop r3   $ pop r2   $ pop r1   $ pop r0
 
-#define OCT_NSAVREG 32
-
-#define PUSH_OTHER_REGS PUSH_CALLER_REGS $ PUSH_CALLEE_REGS
-#define POP_OTHER_REGS POP_CALLEE_REGS $ POP_CALLER_REGS
+#define OCT_NSAVREG 20
 
 #define OCT_TASK7 0x80
 	
@@ -227,7 +218,9 @@ oct_wake_task:
 	lds r24,oct_curmask
 	and r25,r24
 	breq 1f
+	;;sei
 	OCT_SWINT
+	;;nop
 1:	out SREG,r23
 	ret
 	.size oct_wake_task, .-oct_wake_task
@@ -243,16 +236,20 @@ oct_idle_task:
 	lds r25,oct_rdylist
 	and r25,r24
 	sts oct_rdylist,r25
+	;;sei
 	OCT_SWINT
+	;;nop
 	out SREG,r23
 	ret
 	.size oct_idle_task, .-oct_idle_task
 
 	;; void oct_swap_task()
+	;; This assumes no CALLER_SAVES registers need to be saved/restored.
+	;; Rationale: This is only called from SWISR after idle or wake has
+	;; been called and those will be interrupted (oh, unless CEI!)
 	.type oct_swap_task,function
 oct_swap_task:
 	;; move following to SWINT?
-	PUSH_OSUTIL_REGS	; push r23, r24, r25
 	in r23,SREG
 	cli
 	;; if running, flag and return
@@ -261,7 +258,6 @@ oct_swap_task:
 	breq swap_body
 	sts do_swap,r25		; flag to re-run
 	out SREG,r23
-	POP_OSUTIL_REGS
 	ret
 swap_body:
 	lds r24,oct_curmask
@@ -270,7 +266,7 @@ swap_body:
 	;; interrupts enabled in this section
 	sei
 	push r23		; push SREG
-	PUSH_OTHER_REGS	 	; save registers
+	PUSH_CALLEE_REGS 	; save registers
 	push r24		; push curmask
 	;; incoming TCB addr => Y (TODO: if Y is zero, abort)
 	lds r25,oct_rdylist
@@ -300,15 +296,14 @@ swap_body:
 	st Y+,r25		; save outgoing SPH to TCB
 	pop r24			; load curmask
 	sts oct_curmask,r24	;   and restore 
-	POP_OTHER_REGS		; restore registers
+	POP_CALLEE_REGS		; restore registers
 	pop r23			; load SREG, restore later
 	;; trailer
 	cli
 	lds r25,do_swap
 	tst r25
 	breq 1f
-	;; 
-	;; From SPIN testing: (otherwise infinite loop IIRC)
+	;; recheck:
 	;; 1) done if (rdylist & curmask) == 0
 	lds r25,oct_rdylist
 	and r25,r24
@@ -325,7 +320,6 @@ swap_body:
 1:	;; done
 	sts swap_ip,r1		; r1 == 0 here
 	out SREG,r23		; restore SREG
-	POP_OSUTIL_REGS
 	ret
 	.size oct_swap_task, .-oct_swap_task
 
