@@ -97,7 +97,7 @@
 	.global oct_swap_task
 
 	.section .progmem
-	.asciz "OctOS v220622c"
+	.asciz "OctOS v220623a"
 
 	.section .data
 	.global oct_curmask

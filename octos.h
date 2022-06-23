@@ -92,5 +92,21 @@ static inline uint8_t oct_cur_task(void) {
 
 #endif /* __ASSEMBLER__ */
 
+#if OCT_SHORT_NAMES
+#define TASK0 OCT_TASK0
+#define TASK1 OCT_TASK1
+#define TASK2 OCT_TASK2
+#define TASK3 OCT_TASK3
+#define TASK4 OCT_TASK4
+#define TASK5 OCT_TASK5
+#define TASK6 OCT_TASK6
+#define TASK7 OCT_TASK7
+#define os_init oct_os_init
+#define attach_task oct_attach_task
+#define detach_task oct_detach_task
+#define wake_task oct_wake_task
+#define idle_task oct_idle_task
+#endif
+
 #endif
 /* --- last line --- */
