@@ -1,4 +1,4 @@
-** OctOS - a tasking system for AVR CPUs **
+* OctOS - a tasking system for AVR CPUs *
 
 
 # Overview
