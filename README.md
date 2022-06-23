@@ -75,8 +75,6 @@ Warning: OctOS comes with no warranty.  Use at your own risk.
 - Verfiy OS safety through model checking
   (e.g, with [SPIN](http://spinroot.com)).
 
-# Results:
-
 # Notes on the design:
 - There is one user main task, which can be any one of Task0 through Task6 
   which may use all registers.
