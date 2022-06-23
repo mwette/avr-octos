@@ -1,7 +1,7 @@
-**OctOS - a tasking system for AVR CPUs**
+# **OctOS - a tasking system for AVR CPUs**
 
 
-# Overview
+## Overview
 OctOS is intended to be a simple-to-use tasking system for AVR CPUs.
 It consists of a single assembly file, ``octos.S``, and a single header
 file, ``octos.h``.  Features of OctOS are
@@ -13,7 +13,7 @@ file, ``octos.h``.  Features of OctOS are
 
 Warning: OctOS comes with no warranty.  Use at your own risk.
 
-# API
+## API
 - Task IDs are `OCT_TASK0` to `OCT_TASK7`.
 - `OCT_TASK0` is the highest priority task; `OCT_TASK7` is the lowest.
 - `oct_os_init(id)` (usually in `main`) initializes OctOS, where `id` is the
@@ -29,7 +29,7 @@ Warning: OctOS comes with no warranty.  Use at your own risk.
    `id-set` is bitwise or'd list of tasks to put to sleep
 - `oct_detach_task(id)` removes task `id`
 
-# Notes:
+## Notes:
   - Predefined idle tasks are ``oct_spin`` and ``oct_rest``.  One of these is
     intended to be used for `OCT_TASK7`.  The `rest` version uses sleep.
   - There is no separate task stack so all tasks must provide enough
@@ -37,7 +37,7 @@ Warning: OctOS comes with no warranty.  Use at your own risk.
   - `oct_idle_task(OCT_TASK7)` has no effect: the idle task cannot
     be idled; it is always ready.
 
-# Example:
+## Example:
   ```
   uint8_t idle[0x40], stk2[0x40], stk3[0x40];
   void task2() { while (1) { oct_idle_task(OCT_TASK2); ... } }
@@ -59,7 +59,7 @@ Warning: OctOS comes with no warranty.  Use at your own risk.
   }
   ```
   
-# Principles:
+## Principles:
 - Support multiple pre-emptive threads of execution.
 - Emphasize small flash and ram footprint over general purpose multi-tasking 
   features like semaphores, timers.  It is assumed interrupt masking is 
@@ -75,7 +75,7 @@ Warning: OctOS comes with no warranty.  Use at your own risk.
 - Verfiy OS safety through model checking
   (e.g, with [SPIN](http://spinroot.com)).
 
-# Notes on the design:
+## Notes on the design:
 - There is one user main task, which can be any one of Task0 through Task6 
   which may use all registers.
 - Interrupts are not masked during the bulk the task swap operation.
