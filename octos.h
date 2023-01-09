@@ -31,7 +31,7 @@
 #define OCT_PORT PORTE
 #endif
 #ifndef OCT_PIN_bm
-#define OCT_PIN PIN0_bm
+#define OCT_PIN_bm PIN0_bm
 #endif
 #ifndef OCT_SWISR
 #define OCT_SWISR() asm(	\

@@ -18,7 +18,7 @@ Warning: OctOS comes with no warranty.  Use at your own risk.
 - `OCT_TASK0` is the highest priority task; `OCT_TASK7` is the lowest.
 - `oct_os_init(id)` (usually in `main`) initializes OctOS, where `id` is the
    task id for the main task
-- `oct_attach_task(id, ftn, stk, siz)` will attached a task
+- `oct_attach_task(id, ftn, stk, siz)` attach a task
   - id is the ``OCT_TASK0`` .. ``OCT_TASK7``
   - ftn is the task function
   - stk is data for stack

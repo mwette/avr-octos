@@ -25,7 +25,7 @@
 ;;;    + disabled when an interrupt occurs and
 ;;;    + enabled when RETI is executed
 ;;; 2) ABI (gcc, avr-libc)
-;;;    + caller saves: r18-r27,r30-r31
+;;;    + caller saves: r18-r27,r30-r31 (and SREG)
 ;;;    + callee saves: r2-r17,r28-r29
 ;;;    + callee clear: r1
 ;;;    + unsaved temp: r0
@@ -97,7 +97,7 @@
 	.global oct_swap_task
 
 	.section .progmem
-	.asciz "OctOS v220623a"
+	.asciz "OctOS v220626a"
 
 	.section .data
 	.global oct_curmask
@@ -111,6 +111,7 @@ swap_ip: .skip 1		; swap in progress
 tcbtabl: .skip 8*TCB_SIZE	; TCB table (stack pointer only)
 
 	.section .text
+	.align 7
 
 	;; idle tasks
 	.type oct_spin,function
@@ -331,4 +332,7 @@ swap_body:
 	ret
 	.size oct_swap_task, .-oct_swap_task
 
+	.skip 64
+	.align 7
+	
 ;;; --- last line ---
